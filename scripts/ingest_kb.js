@@ -104,6 +104,15 @@ async function scrapeOne(page, url) {
         cur.paragraphs.push(t);
       }
     }
+    // Intercom help-center articles render some content twice (a visible
+    // <p> + an a11y/duplicate <li> inside step lists), so the same line
+    // ends up in `paragraphs` twice in a row. Dedup consecutive duplicates
+    // before downstream chunking — saves ~30% on chunk byte size and
+    // cleans up the embedded text.
+    for (const s of sections) {
+      s.paragraphs = s.paragraphs.filter((p, i, a) => p !== a[i - 1]);
+    }
+
     // Full plain-text content for kb_docs.content_md
     const content_md = sections
       .map((s) => (s.heading ? `\n## ${s.heading}\n\n` : '') + s.paragraphs.join('\n\n'))

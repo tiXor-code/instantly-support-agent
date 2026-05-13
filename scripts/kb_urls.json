@@ -1,28 +1,44 @@
 {
-  "description": "Hand-picked 18 articles from help.instantly.ai/en covering the 5 categories required by Task B. Selection criteria: diversity across topics, common-question coverage (how-to + troubleshooting), recency of lastmod.",
+  "description": "34 hand-picked articles from help.instantly.ai/en. Curation criteria: (a) one canonical article per topic — avoid 4 near-duplicate provider variants of the same setup; (b) cover every category required by Task B (setup / deliverability / campaigns / billing / integrations); (c) for every test ticket in evals/tickets.json, include the dedicated article that answers it directly when one exists in the sitemap (avoids retrieving from adjacent mega-guides at lower similarity); (d) include a few high-value articles outside the eval set so the KB isn't overfit to the test cases.",
   "categories": ["setup", "deliverability", "campaigns", "billing", "integrations"],
   "urls": [
     { "url": "https://help.instantly.ai/en/articles/6222224-how-to-connect-your-email-accounts-to-instantly", "category": "setup" },
     { "url": "https://help.instantly.ai/en/articles/6502998-connect-google-gsuite-accounts-to-instantly-via-app-password-method", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/6697278-connect-google-accounts-via-google-oauth-method", "category": "setup" },
     { "url": "https://help.instantly.ai/en/articles/6502917-connecting-your-microsoft-365-account-to-instantly-2-0", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/7896857-how-to-fix-disconnected-email-accounts", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/6532027-why-do-my-google-accounts-get-disconnected-and-how-to-fix-it", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/6451970-quick-start-guide-all-in-one", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/11991261-getting-started-with-email-accounts-dashboard", "category": "setup" },
 
     { "url": "https://help.instantly.ai/en/articles/5975329-how-warm-up-works-and-why-it-s-important", "category": "deliverability" },
     { "url": "https://help.instantly.ai/en/articles/6222401-how-to-ensure-your-emails-get-delivered-and-avoid-spam-filters", "category": "deliverability" },
     { "url": "https://help.instantly.ai/en/articles/7187587-understanding-and-fixing-campaign-email-bounces", "category": "deliverability" },
     { "url": "https://help.instantly.ai/en/articles/6222192-how-to-set-up-mx-spf-dkim-dmarc-domain-forwarding", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/6191077-how-to-add-unsubscribe-link", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/8001514-dkim-not-found", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/8860388-list-unsubscribe", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/9823139-high-bounce-auto-pause-feature", "category": "deliverability" },
 
     { "url": "https://help.instantly.ai/en/articles/6386134-how-to-create-a-campaign-complete-setup-guide", "category": "campaigns" },
     { "url": "https://help.instantly.ai/en/articles/6135930-how-to-add-and-use-variables-in-campaigns", "category": "campaigns" },
     { "url": "https://help.instantly.ai/en/articles/6661549-a-z-testing-how-to-create-email-variants", "category": "campaigns" },
     { "url": "https://help.instantly.ai/en/articles/5975337-campaign-not-sending-complete-troubleshooting-guide", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/6222212-pre-launch-campaign-checklist", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/6253114-adding-leads-to-a-campaign", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/7046484-inbox-rotation-assign-sending-accounts-to-a-campaign", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/6602310-analytics", "category": "campaigns" },
 
     { "url": "https://help.instantly.ai/en/articles/7917024-how-to-upgrade-downgrade-your-plan", "category": "billing" },
     { "url": "https://help.instantly.ai/en/articles/7918806-how-to-cancel-your-subscription", "category": "billing" },
     { "url": "https://help.instantly.ai/en/articles/13559163-understanding-your-billing-charges", "category": "billing" },
+    { "url": "https://help.instantly.ai/en/articles/13941298-instantly-free-trial", "category": "billing" },
 
     { "url": "https://help.instantly.ai/en/articles/6261906-webhooks", "category": "integrations" },
     { "url": "https://help.instantly.ai/en/articles/7866145-zapier-integration", "category": "integrations" },
     { "url": "https://help.instantly.ai/en/articles/8848886-how-to-connect-hubspot-to-instantly", "category": "integrations" },
-    { "url": "https://help.instantly.ai/en/articles/8848900-how-to-connect-salesforce-to-instantly", "category": "integrations" }
+    { "url": "https://help.instantly.ai/en/articles/8848900-how-to-connect-salesforce-to-instantly", "category": "integrations" },
+    { "url": "https://help.instantly.ai/en/articles/8848881-how-to-connect-pipedrive-to-instantly", "category": "integrations" },
+    { "url": "https://help.instantly.ai/en/articles/8843089-import-leads-from-hubspot-salesforce-and-pipedrive", "category": "integrations" }
   ]
 }

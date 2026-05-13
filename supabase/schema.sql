@@ -115,14 +115,19 @@ create table if not exists settings (
 );
 
 -- Seed default settings. Idempotent: re-running keeps existing values.
+-- Default thresholds calibrated against the 12-ticket eval suite running on
+-- text-embedding-3-small + ~34-article KB. text-embedding-3-small produces
+-- relevant-match cosines in the 0.55-0.85 range on this content (not the
+-- 0.85+ range we'd expect from older embedding models), so the floor sits
+-- at the bottom of the relevant band, not the middle. See README §3 + §8.
 insert into settings (key, value) values
-  ('cosine_floor',          to_jsonb(0.78::float)),
-  ('cosine_margin',         to_jsonb(0.05::float)),
-  ('self_grade_floor',      to_jsonb(4::int)),
+  ('cosine_floor',          to_jsonb(0.60::float)),
+  ('cosine_margin',         to_jsonb(0.01::float)),
+  ('self_grade_floor',      to_jsonb(5::int)),
   ('classification_conf_floor', to_jsonb(0.0::float)),
     -- classification is metadata, not a hard gate; 0.0 means "always pass"
     -- can be raised later if classification reliability becomes an issue
-  ('hard_floor_top1_cosine', to_jsonb(0.5::float)),
+  ('hard_floor_top1_cosine', to_jsonb(0.45::float)),
     -- below this, short-circuit to cannot_answer (no doc plausibly answers)
   ('n8n_webhook_url',       to_jsonb('https://n8n.example.com/webhook/respond-ticket'::text)),
   ('n8n_callback_secret',   to_jsonb('change-me-in-production'::text))

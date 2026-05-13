@@ -1,0 +1,95 @@
+{
+  "name": "Instantly Support Agent — Drain Pending Tickets",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "minutes", "minutesInterval": 10 }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 10 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the Supabase REST query: status='processing' AND created_at\n// older than 5 minutes ago. Anything matching has been waiting on n8n\n// for too long — likely the tunnel was down at the time the dashboard\n// fired the webhook, or the workflow hit an unhandled crash. Re-fire.\nconst cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();\nreturn { json: { cutoff } };"
+      },
+      "id": "build-cutoff",
+      "name": "Build Cutoff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?status=eq.processing&created_at=lt.{{ encodeURIComponent($json.cutoff) }}&select=id,subject,body,customer_email,retry_count&order=created_at.asc&limit=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 5000 }
+      },
+      "id": "fetch-stale",
+      "name": "Fetch Stale Tickets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fan out: emit one item per stale ticket so downstream nodes process\n// them individually with n8n's normal item iteration semantics.\nconst rows = $input.first().json || [];\nif (!Array.isArray(rows) || rows.length === 0) return [];\nreturn rows.map((r) => ({ json: r }));"
+      },
+      "id": "fanout",
+      "name": "Fan Out",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.example.com/webhook/respond-ticket",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "content-type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"ticket_id\": \"{{ $json.id }}\",\n  \"subject\": {{ JSON.stringify($json.subject) }},\n  \"body\": {{ JSON.stringify($json.body) }},\n  \"customer_email\": {{ JSON.stringify($json.customer_email) }}\n}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "refire",
+      "name": "Re-fire Respond-Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 0],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Every 10 Minutes": {
+      "main": [[{ "node": "Build Cutoff", "type": "main", "index": 0 }]]
+    },
+    "Build Cutoff": {
+      "main": [[{ "node": "Fetch Stale Tickets", "type": "main", "index": 0 }]]
+    },
+    "Fetch Stale Tickets": {
+      "main": [[{ "node": "Fan Out", "type": "main", "index": 0 }]]
+    },
+    "Fan Out": {
+      "main": [[{ "node": "Re-fire Respond-Ticket", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

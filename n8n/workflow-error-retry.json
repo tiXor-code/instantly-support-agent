@@ -1,0 +1,206 @@
+{
+  "name": "Instantly Support Agent — Error Retry",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Walk the failed execution's runData and pull the ticket_id from the\n// inbound webhook payload (the one node guaranteed to have run before\n// any failure).\nconst exec = $input.first().json.execution;\nconst trigger = exec?.lastNodeExecuted || 'unknown';\nlet ticket_id = null;\nlet attempt_payload = {};\n\nfor (const [nodeName, runs] of Object.entries(exec?.runData || {})) {\n  for (const run of runs) {\n    const items = run?.data?.main?.[0] || [];\n    for (const item of items) {\n      const j = item.json || {};\n      const body = j.body || j;\n      if (body && body.ticket_id) {\n        ticket_id = body.ticket_id;\n        attempt_payload = {\n          ticket_id,\n          subject: body.subject ?? null,\n          body: body.body ?? null,\n          customer_email: body.customer_email ?? null\n        };\n        break;\n      }\n    }\n    if (ticket_id) break;\n  }\n  if (ticket_id) break;\n}\n\nreturn {\n  json: {\n    ticket_id,\n    failing_node: trigger,\n    error_message: exec?.error?.message || 'unknown',\n    attempt_payload\n  }\n};"
+      },
+      "id": "extract-ticket-id",
+      "name": "Extract Ticket ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}&select=id,retry_count,status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" }
+          ]
+        },
+        "options": { "timeout": 5000 }
+      },
+      "id": "fetch-attempts",
+      "name": "Fetch Attempts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 0],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decide whether to retry. Cap at 3 attempts; after that, write\n// status='error' and callback dashboard with structured failure context.\nconst prev = $('Extract Ticket ID').first().json;\nconst rows = $input.first().json || [];\nconst current = (Array.isArray(rows) && rows.length > 0) ? rows[0] : null;\nconst current_attempts = current?.retry_count ?? 0;\nconst max_attempts = 3;\nconst should_retry = current_attempts + 1 <= max_attempts && current?.status === 'processing';\n\nreturn {\n  json: {\n    ticket_id: prev.ticket_id,\n    failing_node: prev.failing_node,\n    error_message: prev.error_message,\n    attempt_payload: prev.attempt_payload,\n    current_attempts,\n    next_attempts: current_attempts + 1,\n    max_attempts,\n    should_retry\n  }\n};"
+      },
+      "id": "decide-retry",
+      "name": "Decide Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "rt-1",
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true },
+              "leftValue": "={{ $json.should_retry }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-should-retry",
+      "name": "IF should_retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "content-type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"retry_count\": {{ $json.next_attempts }}\n}",
+        "options": { "timeout": 5000 }
+      },
+      "id": "increment-attempts",
+      "name": "Increment Attempts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, -100]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-backoff",
+      "name": "Wait (backoff)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1200, -100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.example.com/webhook/respond-ticket",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "content-type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify($('Decide Retry').first().json.attempt_payload) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "refire-workflow",
+      "name": "Re-fire Respond-Ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, -100]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
+            { "name": "content-type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"status\": \"error\",\n  \"completed_at\": \"{{ $now.toISO() }}\"\n}",
+        "options": { "timeout": 5000 }
+      },
+      "id": "mark-error",
+      "name": "Mark Ticket Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_CALLBACK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-n8n-token", "value": "={{ $env.N8N_CALLBACK_SECRET }}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Decide Retry').first().json.ticket_id }}\",\n  \"classification\": null,\n  \"top_chunks\": [],\n  \"draft_response\": null,\n  \"cited_docs\": [],\n  \"self_grade\": null,\n  \"verdict\": \"error\",\n  \"verdict_reason\": \"max_retries_exceeded ({{ $('Decide Retry').first().json.current_attempts }}): {{ $('Decide Retry').first().json.error_message }}\",\n  \"latency_ms\": null,\n  \"prompt_versions\": null,\n  \"raw_llm_outputs\": { \"error_message\": \"{{ $('Decide Retry').first().json.error_message }}\", \"failing_node\": \"{{ $('Decide Retry').first().json.failing_node }}\" }\n}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "callback-error",
+      "name": "Callback Dashboard (error)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 100]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [[{ "node": "Extract Ticket ID", "type": "main", "index": 0 }]]
+    },
+    "Extract Ticket ID": {
+      "main": [[{ "node": "Fetch Attempts", "type": "main", "index": 0 }]]
+    },
+    "Fetch Attempts": {
+      "main": [[{ "node": "Decide Retry", "type": "main", "index": 0 }]]
+    },
+    "Decide Retry": {
+      "main": [[{ "node": "IF should_retry", "type": "main", "index": 0 }]]
+    },
+    "IF should_retry": {
+      "main": [
+        [{ "node": "Increment Attempts", "type": "main", "index": 0 }],
+        [{ "node": "Mark Ticket Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Increment Attempts": {
+      "main": [[{ "node": "Wait (backoff)", "type": "main", "index": 0 }]]
+    },
+    "Wait (backoff)": {
+      "main": [[{ "node": "Re-fire Respond-Ticket", "type": "main", "index": 0 }]]
+    },
+    "Mark Ticket Error": {
+      "main": [[{ "node": "Callback Dashboard (error)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

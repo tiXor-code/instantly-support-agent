@@ -1,0 +1,132 @@
+{
+  "description": "Hand-crafted eval tickets for Task B. 2 tickets per category, with expected verdict + expected_answer_quality annotations so evals/run.js can compute auto-rate and accuracy.",
+  "expected_verdict_values": ["auto_send", "human_review", "cannot_answer"],
+  "expected_answer_quality_values": ["correct", "partial", "wrong", "n/a"],
+  "tickets": [
+    {
+      "id": "eval-howto-1",
+      "category": "how_to_question",
+      "subject": "How do I add an unsubscribe link to my campaign?",
+      "body": "I'm setting up a new cold campaign and need to include an unsubscribe link. Where do I do that in the editor?",
+      "customer_email": "eval+howto1@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "Common how-to with documented variable {{unsubscribe}}. Should retrieve cleanly and pass both gates."
+    },
+    {
+      "id": "eval-howto-2",
+      "category": "how_to_question",
+      "subject": "How do I connect a Microsoft 365 inbox?",
+      "body": "Trying to add a new sending account from my company's M365 tenant. What's the setup flow?",
+      "customer_email": "eval+howto2@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "Documented in 'Connecting your Microsoft 365 account' article. Should retrieve and answer cleanly."
+    },
+
+    {
+      "id": "eval-deliv-1",
+      "category": "how_to_question",
+      "subject": "What's the warmup process and how long does it take?",
+      "body": "New to cold email. How does Instantly's warmup work, and how long should I run it before launching campaigns?",
+      "customer_email": "eval+deliv1@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "partial",
+      "rationale": "First half answerable from the warmup article. Specific duration is NOT in the docs (we tested this in self_grade few-shot example 2). Self-grade should catch the partial-answer case and route to human."
+    },
+    {
+      "id": "eval-deliv-2",
+      "category": "how_to_question",
+      "subject": "My DKIM check is failing - how do I fix it?",
+      "body": "I just connected a domain and the DKIM check shows red. What do I need to do in my DNS?",
+      "customer_email": "eval+deliv2@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "Multiple SPF/DKIM articles in KB cover this. Should retrieve, answer, pass gates."
+    },
+
+    {
+      "id": "eval-bug-1",
+      "category": "bug_report",
+      "subject": "Open-tracking pixel stopped firing for one inbox only",
+      "body": "All my mailboxes track opens fine except one - it shows sends but 0 opens for the past 4 days. Same domain, same setup as the others.",
+      "customer_email": "eval+bug1@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "n/a",
+      "rationale": "No documented workaround for this specific symptom. Drafter should output cannot_answer with reason 'no documented workaround for this symptom'. Verdict ends up cannot_answer + routed to human."
+    },
+    {
+      "id": "eval-bug-2",
+      "category": "bug_report",
+      "subject": "Campaign not sending despite being active",
+      "body": "Campaign shows status 'Active' but the send count hasn't moved in 24h. I haven't paused anything.",
+      "customer_email": "eval+bug2@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "There IS a documented troubleshooting guide (campaign-not-sending-complete-troubleshooting-guide). Even though it's a bug-shaped ticket, the doc covers the exact symptom. Should auto-send."
+    },
+
+    {
+      "id": "eval-feature-1",
+      "category": "feature_request",
+      "subject": "Can Instantly send via Postmark?",
+      "body": "We use Postmark for our transactional email and would love to plug it into Instantly for cold outreach instead of warming up new mailboxes.",
+      "customer_email": "eval+feature1@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "n/a",
+      "rationale": "No KB article confirms or denies Postmark. Drafter should output cannot_answer with reason 'feature existence not confirmed in knowledge base'."
+    },
+    {
+      "id": "eval-feature-2",
+      "category": "feature_request",
+      "subject": "Does Instantly integrate with Hubspot?",
+      "body": "We're a Hubspot shop. Can we sync interested leads from Instantly into Hubspot CRM?",
+      "customer_email": "eval+feature2@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "Hubspot integration article exists in KB. Drafter should confirm + point to the doc."
+    },
+
+    {
+      "id": "eval-account-1",
+      "category": "account_issue",
+      "subject": "I can't sign in - reset email never arrives",
+      "body": "Tried to log in this morning, got bounced. Requested a password reset 3 times in the last hour - nothing in my inbox or spam.",
+      "customer_email": "eval+account1@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "n/a",
+      "rationale": "draft.v1 prompt explicitly says account_issue category ALWAYS outputs cannot_answer (account access requires human review). Routes to human."
+    },
+    {
+      "id": "eval-account-2",
+      "category": "account_issue",
+      "subject": "Need to remove a teammate from our workspace",
+      "body": "Our previous account manager left the company. How do I remove their seat from our workspace and stop billing for it?",
+      "customer_email": "eval+account2@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "n/a",
+      "rationale": "Account-issue, customer-specific. Same as above: drafter declines, routes to human."
+    },
+
+    {
+      "id": "eval-billing-1",
+      "category": "billing",
+      "subject": "How do I upgrade my plan?",
+      "body": "I'm on the starter plan and want to move to growth. Where in the dashboard do I do that?",
+      "customer_email": "eval+billing1@example.com",
+      "expected_verdict": "auto_send",
+      "expected_answer_quality": "correct",
+      "rationale": "Clean policy how-to. Documented. Should auto-send."
+    },
+    {
+      "id": "eval-billing-2",
+      "category": "billing",
+      "subject": "Why was I charged $147 today? I cancelled last month.",
+      "body": "I cancelled my subscription on April 12 but a $147 charge hit my card today. Please refund.",
+      "customer_email": "eval+billing2@example.com",
+      "expected_verdict": "human_review",
+      "expected_answer_quality": "n/a",
+      "rationale": "Customer-specific billing dispute. draft.v1 explicitly says billing customer-specific charges -> cannot_answer with reason 'customer-specific billing'. Routes to human."
+    }
+  ]
+}

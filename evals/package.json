@@ -1,0 +1,14 @@
+{
+  "name": "instantly-support-agent-evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "node run.js",
+    "csv": "CSV=1 node run.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "dotenv": "^17.0.0"
+  }
+}

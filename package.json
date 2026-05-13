@@ -1,0 +1,21 @@
+{
+  "name": "instantly-support-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repo-root workspace orchestration: vitest across dashboard/, scripts/, and n8n code-node tests; Playwright UI tests against the live deploy.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:n8n:extract": "node tests/n8n/extract-code-nodes.mjs",
+    "test:e2e:adversarial": "node evals/adversarial.js",
+    "test:ui": "playwright test",
+    "test:all": "npm run test:n8n:extract && npm run test && npm run test:ui",
+    "pretest": "npm run test:n8n:extract"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "vitest": "^2.1.0"
+  }
+}

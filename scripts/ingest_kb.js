@@ -26,6 +26,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
+import { chunkSections } from './lib/chunk.js';
+import { dedupConsecutive } from './lib/dedup.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // Load .env or .env.local from repo root if present
@@ -47,10 +49,6 @@ const AZURE_EMBED_DEPLOYMENT = process.env.AZURE_ISA_EMBED_DEPLOYMENT || 'text-e
 const AZURE_API_VERSION = process.env.AZURE_ISA_API_VERSION || '2024-10-21';
 const DRY_RUN = process.env.DRY_RUN === '1';
 const EMBED_DIMS = 1536; // text-embedding-3-small native
-
-// Chunking heuristics. tiktoken-free: 4 chars ~ 1 token for English prose.
-const MAX_CHUNK_CHARS = 4000;        // ~1000 tokens
-const OVERLAP_CHARS   = 400;         // ~100 tokens
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing SUPABASE_URL or service key. Set them in repo-root .env.local.');
@@ -104,55 +102,21 @@ async function scrapeOne(page, url) {
         cur.paragraphs.push(t);
       }
     }
-    // Intercom help-center articles render some content twice (a visible
-    // <p> + an a11y/duplicate <li> inside step lists), so the same line
-    // ends up in `paragraphs` twice in a row. Dedup consecutive duplicates
-    // before downstream chunking — saves ~30% on chunk byte size and
-    // cleans up the embedded text.
-    for (const s of sections) {
-      s.paragraphs = s.paragraphs.filter((p, i, a) => p !== a[i - 1]);
-    }
-
-    // Full plain-text content for kb_docs.content_md
-    const content_md = sections
-      .map((s) => (s.heading ? `\n## ${s.heading}\n\n` : '') + s.paragraphs.join('\n\n'))
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    return { title, sections, content_md };
+    return { title, sections };
   });
-  return data;
-}
-
-// ----------------------------------------------------------------------------
-// Chunking
-// ----------------------------------------------------------------------------
-
-function chunkSections(sections, docMeta) {
-  const chunks = [];
-  for (const sec of sections) {
-    let buf = sec.heading ? `## ${sec.heading}\n\n` : '';
-    for (const p of sec.paragraphs) {
-      const candidate = buf + (buf ? '\n\n' : '') + p;
-      if (candidate.length > MAX_CHUNK_CHARS && buf.trim()) {
-        chunks.push({ section_heading: sec.heading, content: buf.trim() });
-        buf = (sec.heading ? `## ${sec.heading}\n\n` : '') + buf.slice(-OVERLAP_CHARS) + '\n\n' + p;
-      } else {
-        buf = candidate;
-      }
-    }
-    if (buf.trim()) chunks.push({ section_heading: sec.heading, content: buf.trim() });
+  // Dedup consecutive duplicate paragraphs (Intercom renders some lines as
+  // both <p> and <li>, so the scraper sees them twice). Done outside
+  // page.evaluate so the dedup helper is the single source of truth.
+  for (const s of data.sections) {
+    s.paragraphs = dedupConsecutive(s.paragraphs);
   }
-  // Drop empties + assign chunk_index
-  return chunks
-    .filter((c) => c.content.length >= 80)
-    .map((c, i) => ({
-      content: c.content,
-      section_heading: c.section_heading,
-      chunk_index: i,
-      ...docMeta,
-    }));
+  // Full plain-text content for kb_docs.content_md
+  const content_md = data.sections
+    .map((s) => (s.heading ? `\n## ${s.heading}\n\n` : '') + s.paragraphs.join('\n\n'))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { title: data.title, sections: data.sections, content_md };
 }
 
 // ----------------------------------------------------------------------------

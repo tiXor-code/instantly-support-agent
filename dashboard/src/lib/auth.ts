@@ -1,10 +1,6 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
+import { isEmailAllowed } from './allowlist';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -15,9 +11,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async signIn({ user }) {
-      if (!user.email) return false;
-      if (ALLOWED_EMAILS.length === 0) return true;
-      return ALLOWED_EMAILS.includes(user.email.toLowerCase());
+      return isEmailAllowed(user.email, process.env.ALLOWED_EMAILS);
     },
     async session({ session }) {
       return session;

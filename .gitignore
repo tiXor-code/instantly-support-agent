@@ -32,3 +32,9 @@ coverage/
 scripts/.kb_cache/
 .vercel
 evals/.results/
+
+# Test artifacts
+tests/n8n/extracted/
+playwright-report/
+test-results/
+playwright/.auth/

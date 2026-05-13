@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createServiceClient } from '@/lib/supabase';
+import { verifyHmac } from '@/lib/hmac';
 
 // POST /api/webhook/ticket-in
 //
@@ -114,17 +114,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ticket_id: inserted.id, deduped: false });
-}
-
-function verifyHmac(rawBody: string, signatureHeader: string, secret: string): boolean {
-  const match = signatureHeader.match(/^sha256=([a-f0-9]+)$/i);
-  if (!match) return false;
-  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-  const provided = match[1];
-  if (expected.length !== provided.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'));
-  } catch {
-    return false;
-  }
 }

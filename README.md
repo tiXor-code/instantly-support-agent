@@ -287,6 +287,59 @@ DASHBOARD_BASE_URL=https://<your-deploy>.vercel.app node run.js
 # Per-ticket table + headline auto-rate / agreement.
 ```
 
+## Tests
+
+Layered test suite: 136 tests across 5 layers. The hardest, most load-bearing logic — the multi-signal verdict gate — lives in n8n code-node JS strings inside `n8n/workflow-respond-ticket.json`. To prove it correct without copy-paste drift, the test suite extracts those JS bodies straight out of the workflow JSON before each run and exercises them as plain ES modules.
+
+| Layer | What | Tool | Count |
+|---|---|---|---|
+| 1. Pure unit | HMAC verifier, email allowlist, chunk splitter, scraper dedup | vitest | 33 |
+| 2. n8n code-node logic | classify-prompt builder, classify parser, pre-draft short-circuit, draft-prompt builder, self-grade-prompt builder, **verdict gate truth table**, short-circuit callback | vitest | 49 |
+| 3. API integration | All 8 routes (`ticket-in`, `n8n-callback`, `settings GET/PATCH`, `tickets`, `tickets/[id]`, `tickets/[id]/action`, `runs`) with mocked Supabase + fetch + auth | vitest | 43 |
+| 4. Adversarial E2E | Bad HMAC, missing fields, replay, non-JSON, spoofed/missing callback token, unauthenticated action POST — against the **live deployment** | node | 7 |
+| 5. UI E2E (public) | Auth-gate redirects, signin page renders, signed-out access to protected routes | Playwright | 4 |
+| 5. UI E2E (authenticated, optional) | Queue table, ticket detail, settings round-trip, logs render — gated on `playwright/.auth/teodor.json` storageState; gracefully skips on fresh clones | Playwright | (skipped) |
+
+**The Layer 2 verdict-gate suite covers the full multi-signal truth table.** All eight outcomes — auto_send (all pass), human_review × 5 (cosine below floor / margin below floor / self-grade min below floor / draft parse error / self-grade parse error), cannot_answer (drafter declined), and the missing-signals fallback — each have one explicit test. Hand-edit `compute-verdict`'s `>=` to `<` in the workflow JSON, re-run `npm test`, and the truth-table tests catch it.
+
+### Run the suite
+
+```bash
+# All vitest layers (1, 2, 3) — ~1s
+npm test
+
+# Same with v8 coverage report under ./coverage/
+npm run test:coverage
+
+# Layer 4 — hits the live deploy, exits non-zero on any failure
+npm run test:e2e:adversarial
+
+# Layer 5 — Playwright public tests (auth tests skip if no storageState)
+npm run test:ui
+
+# Everything in sequence
+npm run test:all
+```
+
+### How the n8n code-node extractor works
+
+`tests/n8n/extract-code-nodes.mjs` reads `n8n/workflow-respond-ticket.json`, walks every node of `type: 'n8n-nodes-base.code'`, and writes each `parameters.jsCode` body to `tests/n8n/extracted/<slug>.mjs` wrapped as an `export function run({ items, env, upstream })` that emulates n8n's runtime (`$input.all()`, `$input.first()`, `$json`, `$('Other Node Name')`, `$env`). Vitest's `globalSetup` re-runs the extractor before each test session, so changes to the workflow JSON propagate to the tests automatically. The `tests/n8n/extracted/` directory is gitignored — the JSON is the single source of truth.
+
+### Capturing a Playwright authenticated session (optional)
+
+The five "authenticated" UI specs gracefully skip when no Google-OAuth storageState exists. To enable them locally:
+
+```bash
+npx playwright codegen \
+  --save-storage=playwright/.auth/teodor.json \
+  https://instantly-support-agent.vercel.app
+# Sign in with an allowlisted Google account, close the browser.
+npm run test:ui
+# Now the authenticated project runs as well.
+```
+
+The `.auth/` folder is gitignored.
+
 ## What I'd improve with more time
 
 - **Bigger KB tuned to the actual ticket distribution**. The current 34 articles cover everything our 12-ticket eval suite asks about, but a real Instantly support inbox would have a long tail of ~100-200 article-worthy topics. The right way to size this is to look at 30 days of real tickets, group them by intent, and ensure a dedicated article exists per cluster. We saw a single missing article (the dedicated unsubscribe-link doc) move one query from cosine 0.699 → 0.813 — across a corpus that gain compounds.

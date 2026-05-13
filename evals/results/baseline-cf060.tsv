@@ -1,0 +1,25 @@
+
+id                 category          expected       actual         ✓   top1   sg   lat     reason
+------------------------------------------------------------------------------------------------------------------------
+eval-howto-1       how_to_question   auto_send      auto_send      ✓   0.699  5    17497   cos=0.699 mar=0.146 sg=5
+eval-howto-2       how_to_question   auto_send      human_review   ✗   0.698  5    9865    margin_below_floor (0.026 < 0.05)
+eval-deliv-1       how_to_question   human_review   human_review   ✓   0.674  3    12002   margin_below_floor (0.025 < 0.05)
+eval-deliv-2       how_to_question   auto_send      human_review   ✗   0.555  5    10321   top1_cosine_below_floor (0.555 < 0.6)
+eval-bug-1         bug_report        human_review   cannot_answer  ✓   0.421  —    1660    top1_below_hard_floor (0.421 < 0.5)
+eval-bug-2         bug_report        auto_send      human_review   ✗   0.625  5    11060   margin_below_floor (0.018 < 0.05)
+eval-feature-1     feature_request   human_review   cannot_answer  ✓   0.507  —    7306    drafter_declined:feature existence not confirmed in knowledge base
+eval-feature-2     feature_request   auto_send      auto_send      ✓   0.623  5    8696    cos=0.623 mar=0.109 sg=5
+eval-account-1     account_issue     human_review   cannot_answer  ✓   0.367  —    1748    top1_below_hard_floor (0.367 < 0.5)
+eval-account-2     account_issue     human_review   cannot_answer  ✓   0.613  —    11100   drafter_declined:out of scope for auto-reply
+eval-billing-1     billing           auto_send      auto_send      ✓   0.650  5    9996    cos=0.650 mar=0.059 sg=5
+eval-billing-2     billing           human_review   cannot_answer  ✓   0.414  —    1893    top1_below_hard_floor (0.414 < 0.5)
+
+auto-send rate:  3/12 (25%)
+agreement:       9/12 (75%)
+
+per-category breakdown:
+  how_to_question     auto 1/4  agreed 2/4
+  bug_report          auto 0/2  agreed 1/2
+  feature_request     auto 1/2  agreed 2/2
+  account_issue       auto 0/2  agreed 2/2
+  billing             auto 1/2  agreed 2/2

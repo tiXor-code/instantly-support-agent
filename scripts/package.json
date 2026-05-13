@@ -1,0 +1,16 @@
+{
+  "name": "instantly-support-agent-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "node ingest_kb.js",
+    "ingest:dry-run": "DRY_RUN=1 node ingest_kb.js",
+    "postinstall": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "dotenv": "^17.0.0",
+    "playwright": "^1.50.0"
+  }
+}

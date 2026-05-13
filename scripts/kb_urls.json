@@ -1,0 +1,28 @@
+{
+  "description": "Hand-picked 18 articles from help.instantly.ai/en covering the 5 categories required by Task B. Selection criteria: diversity across topics, common-question coverage (how-to + troubleshooting), recency of lastmod.",
+  "categories": ["setup", "deliverability", "campaigns", "billing", "integrations"],
+  "urls": [
+    { "url": "https://help.instantly.ai/en/articles/6222224-how-to-connect-your-email-accounts-to-instantly", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/6502998-connect-google-gsuite-accounts-to-instantly-via-app-password-method", "category": "setup" },
+    { "url": "https://help.instantly.ai/en/articles/6502917-connecting-your-microsoft-365-account-to-instantly-2-0", "category": "setup" },
+
+    { "url": "https://help.instantly.ai/en/articles/5975329-how-warm-up-works-and-why-it-s-important", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/6222401-how-to-ensure-your-emails-get-delivered-and-avoid-spam-filters", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/7187587-understanding-and-fixing-campaign-email-bounces", "category": "deliverability" },
+    { "url": "https://help.instantly.ai/en/articles/6222192-how-to-set-up-mx-spf-dkim-dmarc-domain-forwarding", "category": "deliverability" },
+
+    { "url": "https://help.instantly.ai/en/articles/6386134-how-to-create-a-campaign-complete-setup-guide", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/6135930-how-to-add-and-use-variables-in-campaigns", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/6661549-a-z-testing-how-to-create-email-variants", "category": "campaigns" },
+    { "url": "https://help.instantly.ai/en/articles/5975337-campaign-not-sending-complete-troubleshooting-guide", "category": "campaigns" },
+
+    { "url": "https://help.instantly.ai/en/articles/7917024-how-to-upgrade-downgrade-your-plan", "category": "billing" },
+    { "url": "https://help.instantly.ai/en/articles/7918806-how-to-cancel-your-subscription", "category": "billing" },
+    { "url": "https://help.instantly.ai/en/articles/13559163-understanding-your-billing-charges", "category": "billing" },
+
+    { "url": "https://help.instantly.ai/en/articles/6261906-webhooks", "category": "integrations" },
+    { "url": "https://help.instantly.ai/en/articles/7866145-zapier-integration", "category": "integrations" },
+    { "url": "https://help.instantly.ai/en/articles/8848886-how-to-connect-hubspot-to-instantly", "category": "integrations" },
+    { "url": "https://help.instantly.ai/en/articles/8848900-how-to-connect-salesforce-to-instantly", "category": "integrations" }
+  ]
+}

@@ -85,18 +85,32 @@ export async function POST(req: NextRequest) {
   const n8nUrl = (settingRow?.value as string | undefined) || process.env.N8N_WEBHOOK_URL;
 
   if (n8nUrl) {
-    fetch(n8nUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        ticket_id: inserted.id,
-        subject,
-        body,
-        customer_email,
-      }),
-    }).catch(() => {
-      // intentional: drain workflow will retry
-    });
+    // Awaited dispatch with a short timeout. Vercel serverless functions
+    // tear down async work as soon as the response is returned, so a
+    // pure fire-and-forget would never reach n8n. We give n8n 5s to
+    // receive (n8n responds via Respond-to-Webhook before the workflow
+    // finishes, so this is actually fast). If n8n is unreachable, the
+    // ticket sits in 'processing' and workflow-drain-pending picks it
+    // up on the next 10-min schedule tick.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      await fetch(n8nUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ticket_id: inserted.id,
+          subject,
+          body,
+          customer_email,
+        }),
+        signal: controller.signal,
+      });
+    } catch {
+      // drain workflow will retry
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   return NextResponse.json({ ticket_id: inserted.id, deduped: false });

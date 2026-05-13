@@ -1,5 +1,5 @@
 {
-  "name": "Instantly Support Agent — Error Retry",
+  "name": "Instantly Support Agent \u2014 Error Retry",
   "nodes": [
     {
       "parameters": {},
@@ -7,7 +7,10 @@
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -17,26 +20,40 @@
       "name": "Extract Ticket ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [200, 0]
+      "position": [
+        200,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}&select=id,retry_count,status",
+        "url": "={{ $env.ISA_SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}&select=id,retry_count,status",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            }
           ]
         },
-        "options": { "timeout": 5000 }
+        "options": {
+          "timeout": 5000
+        }
       },
       "id": "fetch-attempts",
       "name": "Fetch Attempts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [400, 0],
+      "position": [
+        400,
+        0
+      ],
       "continueOnFail": true
     },
     {
@@ -47,17 +64,29 @@
       "name": "Decide Retry",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 0]
+      "position": [
+        600,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "version": 2, "leftValue": "", "caseSensitive": true, "typeValidation": "strict" },
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
           "combinator": "and",
           "conditions": [
             {
               "id": "rt-1",
-              "operator": { "type": "boolean", "operation": "true", "singleValue": true },
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
               "leftValue": "={{ $json.should_retry }}"
             }
           ]
@@ -68,31 +97,51 @@
       "name": "IF should_retry",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [800, 0]
+      "position": [
+        800,
+        0
+      ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
+        "url": "={{ $env.ISA_SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "content-type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
           ]
         },
         "sendBody": true,
-        "bodyContentType": "json",
         "jsonBody": "={\n  \"retry_count\": {{ $json.next_attempts }}\n}",
-        "options": { "timeout": 5000 }
+        "options": {
+          "timeout": 5000
+        },
+        "specifyBody": "json"
       },
       "id": "increment-attempts",
       "name": "Increment Attempts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, -100]
+      "position": [
+        1000,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -103,7 +152,10 @@
       "name": "Wait (backoff)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1200, -100]
+      "position": [
+        1200,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -111,93 +163,199 @@
         "url": "https://n8n.example.com/webhook/respond-ticket",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [{ "name": "content-type", "value": "application/json" }]
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
         },
         "sendBody": true,
-        "bodyContentType": "json",
         "jsonBody": "={{ JSON.stringify($('Decide Retry').first().json.attempt_payload) }}",
-        "options": { "timeout": 60000 }
+        "options": {
+          "timeout": 60000
+        },
+        "specifyBody": "json"
       },
       "id": "refire-workflow",
       "name": "Re-fire Respond-Ticket",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1400, -100]
+      "position": [
+        1400,
+        -100
+      ]
     },
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
+        "url": "={{ $env.ISA_SUPABASE_URL }}/rest/v1/tickets?id=eq.{{ $json.ticket_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}" },
-            { "name": "content-type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            {
+              "name": "apikey",
+              "value": "={{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.ISA_SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
           ]
         },
         "sendBody": true,
-        "bodyContentType": "json",
         "jsonBody": "={\n  \"status\": \"error\",\n  \"completed_at\": \"{{ $now.toISO() }}\"\n}",
-        "options": { "timeout": 5000 }
+        "options": {
+          "timeout": 5000
+        },
+        "specifyBody": "json"
       },
       "id": "mark-error",
       "name": "Mark Ticket Error",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 100]
+      "position": [
+        1000,
+        100
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.DASHBOARD_CALLBACK_URL }}",
+        "url": "={{ $env.ISA_DASHBOARD_CALLBACK_URL }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-n8n-token", "value": "={{ $env.N8N_CALLBACK_SECRET }}" },
-            { "name": "content-type", "value": "application/json" }
+            {
+              "name": "x-n8n-token",
+              "value": "={{ $env.ISA_N8N_CALLBACK_SECRET }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
-        "bodyContentType": "json",
         "jsonBody": "={\n  \"ticket_id\": \"{{ $('Decide Retry').first().json.ticket_id }}\",\n  \"classification\": null,\n  \"top_chunks\": [],\n  \"draft_response\": null,\n  \"cited_docs\": [],\n  \"self_grade\": null,\n  \"verdict\": \"error\",\n  \"verdict_reason\": \"max_retries_exceeded ({{ $('Decide Retry').first().json.current_attempts }}): {{ $('Decide Retry').first().json.error_message }}\",\n  \"latency_ms\": null,\n  \"prompt_versions\": null,\n  \"raw_llm_outputs\": { \"error_message\": \"{{ $('Decide Retry').first().json.error_message }}\", \"failing_node\": \"{{ $('Decide Retry').first().json.failing_node }}\" }\n}",
-        "options": { "timeout": 10000 }
+        "options": {
+          "timeout": 10000
+        },
+        "specifyBody": "json"
       },
       "id": "callback-error",
       "name": "Callback Dashboard (error)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 100]
+      "position": [
+        1200,
+        100
+      ]
     }
   ],
   "connections": {
     "Error Trigger": {
-      "main": [[{ "node": "Extract Ticket ID", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Ticket ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Ticket ID": {
-      "main": [[{ "node": "Fetch Attempts", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Fetch Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Attempts": {
-      "main": [[{ "node": "Decide Retry", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Decide Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Decide Retry": {
-      "main": [[{ "node": "IF should_retry", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "IF should_retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "IF should_retry": {
       "main": [
-        [{ "node": "Increment Attempts", "type": "main", "index": 0 }],
-        [{ "node": "Mark Ticket Error", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Increment Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Ticket Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Increment Attempts": {
-      "main": [[{ "node": "Wait (backoff)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Wait (backoff)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Wait (backoff)": {
-      "main": [[{ "node": "Re-fire Respond-Ticket", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Re-fire Respond-Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Mark Ticket Error": {
-      "main": [[{ "node": "Callback Dashboard (error)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Callback Dashboard (error)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

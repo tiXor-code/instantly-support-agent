@@ -31,3 +31,4 @@ coverage/
 # Local KB scrapes / one-shot artifacts
 scripts/.kb_cache/
 evals/.results/
+.vercel

@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pull ticket payload from the webhook trigger and build the classify\n// system prompt + user message. Settings prompt overrides the inline\n// fallback if seeded into the settings table.\nconst ticket = $('Webhook Trigger').first().json.body || $('Webhook Trigger').first().json;\nconst settingsRows = $input.first().json || [];\nconst byKey = {};\nif (Array.isArray(settingsRows)) for (const r of settingsRows) byKey[r.key] = r.value;\n\nconst t0 = Date.now();\n\nconst CLASSIFY_SYSTEM = (byKey.prompt_classify_v1 && typeof byKey.prompt_classify_v1 === 'string') ? byKey.prompt_classify_v1 : `You classify incoming support tickets for Instantly.ai into one of six categories. You are precise and conservative.\n\nCategories — exact spelling required:\n- \"how_to_question\": customer wants to know how to do something.\n- \"bug_report\": something broken or behaving wrong.\n- \"feature_request\": customer wants a capability that does not exist.\n- \"account_issue\": access, login, ownership, permissions, lockout, password reset.\n- \"billing\": invoices, charges, subscription, refunds, payment methods, plans, credits.\n- \"other\": doesn't cleanly fit above.\n\nOutput schema — JSON only, no surrounding prose:\n{\n  \"category\": \"<one of the six labels>\",\n  \"classification_confidence\": <float 0.0-1.0>,\n  \"reasoning\": \"<one sentence, max 30 words>\"\n}\n\nConfidence calibration:\n- 0.9-1.0: clearly fits one category\n- 0.7-0.89: fits one but mentions another in passing\n- 0.5-0.69: two categories plausible\n- below 0.5: genuinely ambiguous\n\nNever output text outside the JSON object.`;\n\nconst userMsg = `Subject: ${ticket.subject}\\n\\nBody:\\n${ticket.body}`;\n\nreturn {\n  json: {\n    ticket_id: ticket.ticket_id,\n    subject: ticket.subject,\n    body: ticket.body,\n    customer_email: ticket.customer_email,\n    settings: byKey,\n    t0,\n    classify_system: CLASSIFY_SYSTEM,\n    classify_user: userMsg\n  }\n};"
+        "jsCode": "// Pull ticket payload from the webhook trigger and build the classify\n// system prompt + user message. Settings prompt overrides the inline\n// fallback if seeded into the settings table.\nconst ticket = $('Webhook Trigger').first().json.body || $('Webhook Trigger').first().json;\nconst settingsRows = $input.first().json || [];\nconst byKey = {};\nif (Array.isArray(settingsRows)) for (const r of settingsRows) byKey[r.key] = r.value;\n\nconst t0 = Date.now();\n\nconst CLASSIFY_SYSTEM = (byKey.prompt_classify_v1 && typeof byKey.prompt_classify_v1 === 'string') ? byKey.prompt_classify_v1 : `You classify incoming support tickets for Instantly.ai into one of six categories. You are precise and conservative.\n\nCategories — exact spelling required:\n- \"how_to_question\": customer wants to know how to do something.\n- \"bug_report\": something broken or behaving wrong.\n- \"feature_request\": customer wants a capability that does not exist.\n- \"account_issue\": access, login, ownership, permissions, lockout, password reset.\n- \"billing\": invoices, charges, subscription, refunds, payment methods, plans, credits.\n- \"other\": doesn't cleanly fit above.\n\nOutput schema — JSON only, no surrounding prose:\n{\n  \"category\": \"<one of the six labels>\",\n  \"classification_confidence\": <float 0.0-1.0>,\n  \"reasoning\": \"<one sentence, max 30 words>\"\n}\n\nNever output text outside the JSON object.`;\n\nconst userMsg = `Subject: ${ticket.subject}\\n\\nBody:\\n${ticket.body}`;\n\nreturn {\n  json: {\n    ticket_id: ticket.ticket_id,\n    subject: ticket.subject,\n    body: ticket.body,\n    customer_email: ticket.customer_email,\n    settings: byKey,\n    t0,\n    classify_system: CLASSIFY_SYSTEM,\n    classify_user: userMsg\n  }\n};"
       },
       "id": "build-classify",
       "name": "Build Classify Prompt",
@@ -48,22 +48,21 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "={{ $env.AZURE_ISA_ENDPOINT }}/openai/deployments/{{ $env.AZURE_ISA_CHAT_DEPLOYMENT }}/chat/completions?api-version={{ $env.AZURE_ISA_API_VERSION }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "api-key", "value": "={{ $env.AZURE_ISA_KEY }}" },
             { "name": "content-type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"max_tokens\": 300,\n  \"system\": {{ JSON.stringify($json.classify_system) }},\n  \"messages\": [\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.classify_user) }} }\n  ]\n}",
+        "jsonBody": "={\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.classify_system) }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.classify_user) }} }\n  ],\n  \"max_tokens\": 300,\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
         "options": { "timeout": 30000 }
       },
       "id": "classify-call",
-      "name": "Classify (Anthropic)",
+      "name": "Classify (Azure 4o-mini)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [600, 0],
@@ -73,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Strict JSON parse on Anthropic response. On parse failure, mark the\n// run so downstream nodes route to human review with the raw output\n// preserved for debugging.\nconst prev = $('Build Classify Prompt').first().json;\nconst resp = $input.first().json;\nconst raw = resp?.content?.[0]?.text || '';\nlet classification = null;\nlet parse_error = null;\ntry {\n  const cleaned = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  classification = JSON.parse(cleaned);\n} catch (err) {\n  parse_error = String(err.message || err);\n}\nreturn {\n  json: {\n    ...prev,\n    classification,\n    classify_raw: raw,\n    classify_parse_error: parse_error\n  }\n};"
+        "jsCode": "// Strict JSON parse on Azure chat completion response. On parse failure,\n// mark the run so downstream nodes route to human review with the raw\n// output preserved for debugging.\nconst prev = $('Build Classify Prompt').first().json;\nconst resp = $input.first().json;\nconst raw = resp?.choices?.[0]?.message?.content || '';\nlet classification = null;\nlet parse_error = null;\ntry {\n  const cleaned = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  classification = JSON.parse(cleaned);\n} catch (err) {\n  parse_error = String(err.message || err);\n}\nreturn {\n  json: {\n    ...prev,\n    classification,\n    classify_raw: raw,\n    classify_parse_error: parse_error\n  }\n};"
       },
       "id": "parse-classify",
       "name": "Parse Classification",
@@ -84,21 +83,21 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/embeddings",
+        "url": "={{ $env.AZURE_ISA_ENDPOINT }}/openai/deployments/{{ $env.AZURE_ISA_EMBED_DEPLOYMENT }}/embeddings?api-version={{ $env.AZURE_ISA_API_VERSION }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Bearer {{ $env.OPENAI_API_KEY }}" },
+            { "name": "api-key", "value": "={{ $env.AZURE_ISA_KEY }}" },
             { "name": "content-type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\n  \"model\": \"text-embedding-3-small\",\n  \"input\": {{ JSON.stringify(($json.subject || '') + '\\n\\n' + ($json.body || '')) }}\n}",
+        "jsonBody": "={\n  \"input\": {{ JSON.stringify(($json.subject || '') + '\\n\\n' + ($json.body || '')) }}\n}",
         "options": { "timeout": 15000 }
       },
       "id": "embed-query",
-      "name": "Embed Query (OpenAI)",
+      "name": "Embed Query (Azure)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [1000, 0],
@@ -133,7 +132,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Compute L1 cosine signal + decide whether to short-circuit.\n// Short-circuit conditions:\n//   - classify parse failed -> route to human with reason 'malformed_llm_output_classify'\n//   - retrieval returned 0 chunks or top1 below hard floor -> cannot_answer\n// Otherwise proceed to drafting.\nconst prev = $('Parse Classification').first().json;\nconst chunks = ($input.first().json) || [];\nconst arr = Array.isArray(chunks) ? chunks : (chunks.data || []);\n\nconst top1 = arr[0]?.similarity ?? null;\nconst top2 = arr[1]?.similarity ?? null;\nconst margin = top1 != null && top2 != null ? (top1 - top2) : null;\n\nconst hardFloor = Number(prev.settings?.hard_floor_top1_cosine ?? 0.5);\n\nlet should_short_circuit = false;\nlet short_circuit_verdict = null;\nlet short_circuit_reason = null;\n\nif (prev.classify_parse_error) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'error';\n  short_circuit_reason = 'malformed_llm_output_classify';\n}\nif (!should_short_circuit && arr.length === 0) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'cannot_answer';\n  short_circuit_reason = 'no_kb_match';\n}\nif (!should_short_circuit && top1 != null && top1 < hardFloor) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'cannot_answer';\n  short_circuit_reason = `top1_below_hard_floor (${top1.toFixed(3)} < ${hardFloor})`;\n}\n\nreturn {\n  json: {\n    ...prev,\n    top_chunks: arr.map((c) => ({\n      chunk_id: c.chunk_id,\n      doc_url: c.doc_url,\n      doc_title: c.doc_title,\n      category: c.category,\n      section_heading: c.section_heading,\n      score: c.similarity,\n      content_snippet: (c.content || '').slice(0, 500)\n    })),\n    top_chunks_full: arr, // includes full content for the draft prompt\n    top1,\n    top2,\n    margin,\n    should_short_circuit,\n    short_circuit_verdict,\n    short_circuit_reason\n  }\n};"
+        "jsCode": "// Compute L1 cosine signal + decide whether to short-circuit.\n// Short-circuit conditions:\n//   - classify parse failed -> route to human with reason 'malformed_llm_output_classify'\n//   - retrieval returned 0 chunks or top1 below hard floor -> cannot_answer\n// Otherwise proceed to drafting.\nconst prev = $('Parse Classification').first().json;\nconst chunks = ($input.first().json) || [];\nconst arr = Array.isArray(chunks) ? chunks : (chunks.data || []);\n\nconst top1 = arr[0]?.similarity ?? null;\nconst top2 = arr[1]?.similarity ?? null;\nconst margin = top1 != null && top2 != null ? (top1 - top2) : null;\n\nconst hardFloor = Number(prev.settings?.hard_floor_top1_cosine ?? 0.5);\n\nlet should_short_circuit = false;\nlet short_circuit_verdict = null;\nlet short_circuit_reason = null;\n\nif (prev.classify_parse_error) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'error';\n  short_circuit_reason = 'malformed_llm_output_classify';\n}\nif (!should_short_circuit && arr.length === 0) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'cannot_answer';\n  short_circuit_reason = 'no_kb_match';\n}\nif (!should_short_circuit && top1 != null && top1 < hardFloor) {\n  should_short_circuit = true;\n  short_circuit_verdict = 'cannot_answer';\n  short_circuit_reason = `top1_below_hard_floor (${top1.toFixed(3)} < ${hardFloor})`;\n}\n\nreturn {\n  json: {\n    ...prev,\n    top_chunks: arr.map((c) => ({\n      chunk_id: c.chunk_id,\n      doc_url: c.doc_url,\n      doc_title: c.doc_title,\n      category: c.category,\n      section_heading: c.section_heading,\n      score: c.similarity,\n      content_snippet: (c.content || '').slice(0, 500)\n    })),\n    top_chunks_full: arr,\n    top1,\n    top2,\n    margin,\n    should_short_circuit,\n    short_circuit_verdict,\n    short_circuit_reason\n  }\n};"
       },
       "id": "compute-pre-draft",
       "name": "Compute Pre-Draft Decision",
@@ -164,7 +163,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build the category-conditioned draft prompt.\nconst prev = $json;\nconst chunks = prev.top_chunks_full || [];\nconst category = prev.classification?.category || 'other';\n\nconst DRAFT_SYSTEM = (prev.settings?.prompt_draft_v1 && typeof prev.settings.prompt_draft_v1 === 'string') ? prev.settings.prompt_draft_v1 : `You are an Instantly.ai support agent drafting a reply. Your reply must be grounded in the help-center chunks provided. No general world knowledge about Instantly may enter the reply.\n\nRules:\n1. The reply must be answerable from the chunks. If not, output {\"cannot_answer\": true, \"reason\": \"...\", \"used_chunk_ids\": []}.\n2. Quote or closely paraphrase the chunks you used. List used chunk_ids and doc_urls.\n3. Tone: direct, friendly, second-person. No hedging openers. No markdown headers, no emojis.\n4. End with: \"Full guide: <doc_url>\"\n5. Category guidance:\n  - how_to_question: answer if chunks describe steps. <=120 words.\n  - billing: only answer if chunks have the exact policy. Customer-specific charges -> cannot_answer with reason \"customer-specific billing\".\n  - bug_report: only answer if chunks describe a known workaround for the exact symptom. Else cannot_answer with reason \"no documented workaround for this symptom\".\n  - feature_request: only answer if chunks confirm the feature exists. Else cannot_answer with reason \"feature existence not confirmed in knowledge base\".\n  - account_issue: ALWAYS cannot_answer with reason \"account access requires human review\".\n  - other: cannot_answer with reason \"out of scope for auto-reply\".\n\nOutput schema — JSON only, no prose. Either:\n{\n  \"answer\": \"<text ending with 'Full guide: <url>'>\",\n  \"cited_doc_urls\": [\"<url>\", ...],\n  \"used_chunk_ids\": [\"<chunk_id>\", ...]\n}\nOr:\n{\n  \"cannot_answer\": true,\n  \"reason\": \"<one of the reasons listed above>\",\n  \"used_chunk_ids\": []\n}`;\n\nconst chunksBlock = chunks.map((c, i) => `[chunk_id=${c.chunk_id}  similarity=${(c.similarity ?? 0).toFixed(3)}  doc_url=${c.doc_url}  section=\"${c.section_heading ?? ''}\"]\\n${c.content}`).join('\\n\\n');\n\nconst userMsg = `Predicted category: ${category}\\n\\nSubject: ${prev.subject}\\n\\nBody:\\n${prev.body}\\n\\nRetrieved chunks (top ${chunks.length}, ordered by similarity desc):\\n\\n${chunksBlock}`;\n\nreturn {\n  json: {\n    ...prev,\n    draft_system: DRAFT_SYSTEM,\n    draft_user: userMsg\n  }\n};"
+        "jsCode": "// Build the category-conditioned draft prompt + assemble the full\n// prompt string we'll pipe into the Claude CLI subprocess.\nconst prev = $json;\nconst chunks = prev.top_chunks_full || [];\nconst category = prev.classification?.category || 'other';\n\nconst DRAFT_SYSTEM = (prev.settings?.prompt_draft_v1 && typeof prev.settings.prompt_draft_v1 === 'string') ? prev.settings.prompt_draft_v1 : `You are an Instantly.ai support agent drafting a reply. Your reply must be grounded in the help-center chunks provided. No general world knowledge about Instantly may enter the reply.\n\nRules:\n1. The reply must be answerable from the chunks. If not, output {\"cannot_answer\": true, \"reason\": \"...\", \"used_chunk_ids\": []}.\n2. Quote or closely paraphrase the chunks you used. List used chunk_ids and doc_urls.\n3. Tone: direct, friendly, second-person. No hedging openers. No markdown headers, no emojis.\n4. End with: \"Full guide: <doc_url>\"\n5. Category guidance:\n  - how_to_question: answer if chunks describe steps. <=120 words.\n  - billing: only answer if chunks have the exact policy. Customer-specific charges -> cannot_answer with reason \"customer-specific billing\".\n  - bug_report: only answer if chunks describe a known workaround for the exact symptom. Else cannot_answer with reason \"no documented workaround for this symptom\".\n  - feature_request: only answer if chunks confirm the feature exists. Else cannot_answer with reason \"feature existence not confirmed in knowledge base\".\n  - account_issue: ALWAYS cannot_answer with reason \"account access requires human review\".\n  - other: cannot_answer with reason \"out of scope for auto-reply\".\n\nOutput schema — JSON only, no prose. Either:\n{\n  \"answer\": \"<text ending with 'Full guide: <url>'>\",\n  \"cited_doc_urls\": [\"<url>\", ...],\n  \"used_chunk_ids\": [\"<chunk_id>\", ...]\n}\nOr:\n{\n  \"cannot_answer\": true,\n  \"reason\": \"<one of the reasons listed above>\",\n  \"used_chunk_ids\": []\n}`;\n\nconst chunksBlock = chunks.map((c, i) => `[chunk_id=${c.chunk_id}  similarity=${(c.similarity ?? 0).toFixed(3)}  doc_url=${c.doc_url}  section=\"${c.section_heading ?? ''}\"]\\n${c.content}`).join('\\n\\n');\n\nconst userMsg = `Predicted category: ${category}\\n\\nSubject: ${prev.subject}\\n\\nBody:\\n${prev.body}\\n\\nRetrieved chunks (top ${chunks.length}, ordered by similarity desc):\\n\\n${chunksBlock}`;\n\n// Claude CLI runs in non-interactive mode. We pass the system prompt\n// and the user message as a single composed prompt; Claude CLI does not\n// accept --system separately in --bare mode.\nconst full_prompt = `${DRAFT_SYSTEM}\\n\\n---\\n\\n${userMsg}`;\n\nreturn {\n  json: {\n    ...prev,\n    draft_system: DRAFT_SYSTEM,\n    draft_user: userMsg,\n    draft_full_prompt: full_prompt\n  }\n};"
       },
       "id": "build-draft",
       "name": "Build Draft Prompt",
@@ -174,39 +173,13 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
-          ]
-        },
-        "sendBody": true,
-        "bodyContentType": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"max_tokens\": 700,\n  \"system\": {{ JSON.stringify($json.draft_system) }},\n  \"messages\": [\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.draft_user) }} }\n  ]\n}",
-        "options": { "timeout": 45000 }
+        "jsCode": "// Draft step uses the Claude CLI subprocess (mirrors ministeru-pipeline\n// pattern). Authenticated via the user's Claude.ai subscription token\n// stored in macOS Keychain. This is the highest-stakes prompt — Claude\n// quality matters more than cost here, and the subscription covers it.\n//\n// Falls back to error verdict if the CLI fails or output is malformed.\nconst { spawnSync } = require('child_process');\nconst prev = $json;\nconst prompt = prev.draft_full_prompt;\n\n// Read OAuth token from macOS Keychain\nconst secResult = spawnSync(\n  'security',\n  ['find-generic-password', '-s', 'Claude Code-credentials', '-w'],\n  { encoding: 'utf8', env: { HOME: '/Users/johnopenclaw', PATH: '/usr/bin:/bin:/usr/sbin:/sbin' } }\n);\nif (secResult.error || secResult.status !== 0) {\n  return {\n    json: {\n      ...prev,\n      draft_raw: '',\n      draft_parse_error: 'Keychain read failed: ' + (secResult.stderr || secResult.error?.message || 'exit ' + secResult.status),\n      draft_response: null,\n      cited_doc_urls: [],\n      used_chunk_ids: [],\n      cited_docs: [],\n      cannot_answer: false,\n      cannot_answer_reason: null\n    }\n  };\n}\nconst token = JSON.parse(secResult.stdout.trim()).claudeAiOauth.accessToken;\n\nconst result = spawnSync(\n  '/Users/johnopenclaw/.local/bin/claude',\n  ['-p', prompt, '--output-format', 'text', '--bare'],\n  {\n    encoding: 'utf8',\n    maxBuffer: 10 * 1024 * 1024,\n    timeout: 120000,\n    env: {\n      HOME: '/Users/johnopenclaw',\n      PATH: '/Users/johnopenclaw/.local/bin:/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',\n      ANTHROPIC_API_KEY: token\n    }\n  }\n);\n\nconst raw = result.stdout || '';\nlet parsed = null;\nlet parse_error = null;\n\nif (result.error || result.status !== 0) {\n  parse_error = 'Claude CLI failed (exit ' + result.status + '): ' + (result.stderr || result.error?.message || 'unknown');\n} else {\n  try {\n    const cleaned = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsed = JSON.parse(cleaned);\n  } catch (err) {\n    parse_error = String(err.message || err);\n  }\n}\n\nconst draft_response = parsed?.answer ?? null;\nconst cited_doc_urls = parsed?.cited_doc_urls ?? [];\nconst used_chunk_ids = parsed?.used_chunk_ids ?? [];\nconst cannot_answer = parsed?.cannot_answer === true;\nconst cannot_answer_reason = parsed?.reason || null;\n\nconst cited_docs = (cited_doc_urls || []).map((url) => {\n  const match = (prev.top_chunks || []).find((c) => c.doc_url === url);\n  return { doc_url: url, doc_title: match?.doc_title || url };\n});\n\nreturn {\n  json: {\n    ...prev,\n    draft_raw: raw,\n    draft_parse_error: parse_error,\n    draft_response,\n    cited_doc_urls,\n    used_chunk_ids,\n    cited_docs,\n    cannot_answer,\n    cannot_answer_reason\n  }\n};"
       },
       "id": "draft-call",
-      "name": "Draft (Anthropic)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2000, 150],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse draft. Capture either answer-shape or cannot_answer-shape.\nconst prev = $('Build Draft Prompt').first().json;\nconst raw = $input.first().json?.content?.[0]?.text || '';\nlet parsed = null;\nlet parse_error = null;\ntry {\n  const cleaned = raw.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n  parsed = JSON.parse(cleaned);\n} catch (err) {\n  parse_error = String(err.message || err);\n}\n\nconst draft_response = parsed?.answer ?? null;\nconst cited_doc_urls = parsed?.cited_doc_urls ?? [];\nconst used_chunk_ids = parsed?.used_chunk_ids ?? [];\nconst cannot_answer = parsed?.cannot_answer === true;\nconst cannot_answer_reason = parsed?.reason || null;\n\nconst cited_docs = (cited_doc_urls || []).map((url) => {\n  const match = (prev.top_chunks || []).find((c) => c.doc_url === url);\n  return { doc_url: url, doc_title: match?.doc_title || url };\n});\n\nreturn {\n  json: {\n    ...prev,\n    draft_raw: raw,\n    draft_parse_error: parse_error,\n    draft_response,\n    cited_doc_urls,\n    used_chunk_ids,\n    cited_docs,\n    cannot_answer,\n    cannot_answer_reason\n  }\n};"
-      },
-      "id": "parse-draft",
-      "name": "Parse Draft",
+      "name": "Draft (Claude CLI)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2200, 150]
+      "position": [2000, 150]
     },
     {
       "parameters": {
@@ -216,47 +189,46 @@
       "name": "Build Self-Grade Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2400, 150]
+      "position": [2200, 150]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "={{ $env.AZURE_ISA_ENDPOINT }}/openai/deployments/{{ $env.AZURE_ISA_CHAT_DEPLOYMENT }}/chat/completions?api-version={{ $env.AZURE_ISA_API_VERSION }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "api-key", "value": "={{ $env.AZURE_ISA_KEY }}" },
             { "name": "content-type", "value": "application/json" }
           ]
         },
         "sendBody": true,
         "bodyContentType": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5\",\n  \"max_tokens\": 300,\n  \"system\": {{ JSON.stringify($json.sg_system || '') }},\n  \"messages\": [\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.sg_user || '') }} }\n  ]\n}",
+        "jsonBody": "={\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.sg_system || '') }} },\n    { \"role\": \"user\",   \"content\": {{ JSON.stringify($json.sg_user || '') }} }\n  ],\n  \"max_tokens\": 300,\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
         "options": { "timeout": 30000 }
       },
       "id": "sg-call",
-      "name": "Self-Grade (Anthropic)",
+      "name": "Self-Grade (Azure 4o-mini)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2600, 150],
+      "position": [2400, 150],
       "retryOnFail": true,
       "maxTries": 2,
       "continueOnFail": true
     },
     {
       "parameters": {
-        "jsCode": "// Parse self-grade and compute the final verdict using the multi-signal\n// gate. Auto-send requires:\n//   - top1 >= cosine_floor AND (top1 - top2) >= cosine_margin\n//   - min(grounded, directly_answers) >= self_grade_floor\n// Otherwise human_review (or cannot_answer if drafter declined).\nconst prev = $('Build Self-Grade Prompt').first().json;\nconst rawSg = $input.first().json?.content?.[0]?.text || '';\nlet self_grade = null;\nlet sg_parse_error = null;\nif (!prev.skip_self_grade) {\n  try {\n    const cleaned = rawSg.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    self_grade = JSON.parse(cleaned);\n  } catch (err) {\n    sg_parse_error = String(err.message || err);\n  }\n}\n\nconst cosineFloor = Number(prev.settings?.cosine_floor ?? 0.78);\nconst cosineMargin = Number(prev.settings?.cosine_margin ?? 0.05);\nconst sgFloor = Number(prev.settings?.self_grade_floor ?? 4);\n\nconst top1 = prev.top1;\nconst top2 = prev.top2;\nconst margin = prev.margin;\n\nlet verdict = 'human_review';\nlet verdict_reason = 'unspecified';\n\nif (prev.cannot_answer) {\n  verdict = 'cannot_answer';\n  verdict_reason = `drafter_declined:${prev.cannot_answer_reason || 'unspecified'}`;\n} else if (prev.draft_parse_error) {\n  verdict = 'human_review';\n  verdict_reason = `malformed_llm_output_draft`;\n} else if (sg_parse_error) {\n  verdict = 'human_review';\n  verdict_reason = `malformed_llm_output_self_grade`;\n} else if (!self_grade) {\n  verdict = 'human_review';\n  verdict_reason = `self_grade_missing`;\n} else {\n  // both L1 and L2 must pass for auto_send\n  const l1Pass = top1 != null && top2 != null && top1 >= cosineFloor && margin >= cosineMargin;\n  const sgMin = Math.min(self_grade.grounded_in_cited_doc, self_grade.directly_answers_question);\n  const l2Pass = sgMin >= sgFloor;\n  if (l1Pass && l2Pass) {\n    verdict = 'auto_send';\n    verdict_reason = `cos=${top1.toFixed(3)} mar=${margin.toFixed(3)} sg=${sgMin}`;\n  } else if (!l1Pass) {\n    verdict_reason = top1 == null ? 'no_top1' : (top1 < cosineFloor ? `top1_cosine_below_floor (${top1.toFixed(3)} < ${cosineFloor})` : `margin_below_floor (${margin.toFixed(3)} < ${cosineMargin})`);\n  } else {\n    verdict_reason = `self_grade_below_floor (min=${sgMin} < ${sgFloor})`;\n  }\n}\n\nconst latency_ms = Date.now() - (prev.t0 || Date.now());\n\nreturn {\n  json: {\n    ticket_id: prev.ticket_id,\n    classification: prev.classification,\n    top_chunks: prev.top_chunks,\n    draft_response: prev.draft_response,\n    cited_docs: prev.cited_docs,\n    self_grade,\n    verdict,\n    verdict_reason,\n    latency_ms,\n    prompt_versions: { classify: 'v1', draft: 'v1', self_grade: 'v1' },\n    raw_llm_outputs: {\n      classify_raw: prev.classify_raw,\n      draft_raw: prev.draft_raw,\n      self_grade_raw: rawSg,\n      classify_parse_error: prev.classify_parse_error,\n      draft_parse_error: prev.draft_parse_error,\n      sg_parse_error\n    }\n  }\n};"
+        "jsCode": "// Parse self-grade and compute the final verdict using the multi-signal\n// gate. Auto-send requires:\n//   - top1 >= cosine_floor AND (top1 - top2) >= cosine_margin\n//   - min(grounded, directly_answers) >= self_grade_floor\n// Otherwise human_review (or cannot_answer if drafter declined).\nconst prev = $('Build Self-Grade Prompt').first().json;\nconst rawSg = $input.first().json?.choices?.[0]?.message?.content || '';\nlet self_grade = null;\nlet sg_parse_error = null;\nif (!prev.skip_self_grade) {\n  try {\n    const cleaned = rawSg.replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    self_grade = JSON.parse(cleaned);\n  } catch (err) {\n    sg_parse_error = String(err.message || err);\n  }\n}\n\nconst cosineFloor = Number(prev.settings?.cosine_floor ?? 0.78);\nconst cosineMargin = Number(prev.settings?.cosine_margin ?? 0.05);\nconst sgFloor = Number(prev.settings?.self_grade_floor ?? 4);\n\nconst top1 = prev.top1;\nconst top2 = prev.top2;\nconst margin = prev.margin;\n\nlet verdict = 'human_review';\nlet verdict_reason = 'unspecified';\n\nif (prev.cannot_answer) {\n  verdict = 'cannot_answer';\n  verdict_reason = `drafter_declined:${prev.cannot_answer_reason || 'unspecified'}`;\n} else if (prev.draft_parse_error) {\n  verdict = 'human_review';\n  verdict_reason = `malformed_llm_output_draft`;\n} else if (sg_parse_error) {\n  verdict = 'human_review';\n  verdict_reason = `malformed_llm_output_self_grade`;\n} else if (!self_grade) {\n  verdict = 'human_review';\n  verdict_reason = `self_grade_missing`;\n} else {\n  const l1Pass = top1 != null && top2 != null && top1 >= cosineFloor && margin >= cosineMargin;\n  const sgMin = Math.min(self_grade.grounded_in_cited_doc, self_grade.directly_answers_question);\n  const l2Pass = sgMin >= sgFloor;\n  if (l1Pass && l2Pass) {\n    verdict = 'auto_send';\n    verdict_reason = `cos=${top1.toFixed(3)} mar=${margin.toFixed(3)} sg=${sgMin}`;\n  } else if (!l1Pass) {\n    verdict_reason = top1 == null ? 'no_top1' : (top1 < cosineFloor ? `top1_cosine_below_floor (${top1.toFixed(3)} < ${cosineFloor})` : `margin_below_floor (${margin.toFixed(3)} < ${cosineMargin})`);\n  } else {\n    verdict_reason = `self_grade_below_floor (min=${sgMin} < ${sgFloor})`;\n  }\n}\n\nconst latency_ms = Date.now() - (prev.t0 || Date.now());\n\nreturn {\n  json: {\n    ticket_id: prev.ticket_id,\n    classification: prev.classification,\n    top_chunks: prev.top_chunks,\n    draft_response: prev.draft_response,\n    cited_docs: prev.cited_docs,\n    self_grade,\n    verdict,\n    verdict_reason,\n    latency_ms,\n    prompt_versions: { classify: 'azure-4o-mini-v1', draft: 'claude-cli-v1', self_grade: 'azure-4o-mini-v1' },\n    raw_llm_outputs: {\n      classify_raw: prev.classify_raw,\n      draft_raw: prev.draft_raw,\n      self_grade_raw: rawSg,\n      classify_parse_error: prev.classify_parse_error,\n      draft_parse_error: prev.draft_parse_error,\n      sg_parse_error\n    }\n  }\n};"
       },
       "id": "compute-verdict",
       "name": "Compute Verdict",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2800, 150]
+      "position": [2600, 150]
     },
     {
       "parameters": {
-        "jsCode": "// Build a short-circuit callback payload (no draft, no self-grade).\n// Reached when classify failed, retrieval was empty, or top1 < hard floor.\nconst prev = $json;\nconst latency_ms = Date.now() - (prev.t0 || Date.now());\nreturn {\n  json: {\n    ticket_id: prev.ticket_id,\n    classification: prev.classification ?? null,\n    top_chunks: prev.top_chunks ?? [],\n    draft_response: null,\n    cited_docs: [],\n    self_grade: null,\n    verdict: prev.short_circuit_verdict || 'error',\n    verdict_reason: prev.short_circuit_reason || 'unspecified',\n    latency_ms,\n    prompt_versions: { classify: 'v1', draft: null, self_grade: null },\n    raw_llm_outputs: {\n      classify_raw: prev.classify_raw,\n      classify_parse_error: prev.classify_parse_error\n    }\n  }\n};"
+        "jsCode": "// Build a short-circuit callback payload (no draft, no self-grade).\n// Reached when classify failed, retrieval was empty, or top1 < hard floor.\nconst prev = $json;\nconst latency_ms = Date.now() - (prev.t0 || Date.now());\nreturn {\n  json: {\n    ticket_id: prev.ticket_id,\n    classification: prev.classification ?? null,\n    top_chunks: prev.top_chunks ?? [],\n    draft_response: null,\n    cited_docs: [],\n    self_grade: null,\n    verdict: prev.short_circuit_verdict || 'error',\n    verdict_reason: prev.short_circuit_reason || 'unspecified',\n    latency_ms,\n    prompt_versions: { classify: 'azure-4o-mini-v1', draft: null, self_grade: null },\n    raw_llm_outputs: {\n      classify_raw: prev.classify_raw,\n      classify_parse_error: prev.classify_parse_error\n    }\n  }\n};"
       },
       "id": "build-sc-callback",
       "name": "Build Short-Circuit Callback",
@@ -309,15 +281,15 @@
       "main": [[{ "node": "Build Classify Prompt", "type": "main", "index": 0 }]]
     },
     "Build Classify Prompt": {
-      "main": [[{ "node": "Classify (Anthropic)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Classify (Azure 4o-mini)", "type": "main", "index": 0 }]]
     },
-    "Classify (Anthropic)": {
+    "Classify (Azure 4o-mini)": {
       "main": [[{ "node": "Parse Classification", "type": "main", "index": 0 }]]
     },
     "Parse Classification": {
-      "main": [[{ "node": "Embed Query (OpenAI)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Embed Query (Azure)", "type": "main", "index": 0 }]]
     },
-    "Embed Query (OpenAI)": {
+    "Embed Query (Azure)": {
       "main": [[{ "node": "Retrieve Top-K", "type": "main", "index": 0 }]]
     },
     "Retrieve Top-K": {
@@ -333,18 +305,15 @@
       ]
     },
     "Build Draft Prompt": {
-      "main": [[{ "node": "Draft (Anthropic)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Draft (Claude CLI)", "type": "main", "index": 0 }]]
     },
-    "Draft (Anthropic)": {
-      "main": [[{ "node": "Parse Draft", "type": "main", "index": 0 }]]
-    },
-    "Parse Draft": {
+    "Draft (Claude CLI)": {
       "main": [[{ "node": "Build Self-Grade Prompt", "type": "main", "index": 0 }]]
     },
     "Build Self-Grade Prompt": {
-      "main": [[{ "node": "Self-Grade (Anthropic)", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Self-Grade (Azure 4o-mini)", "type": "main", "index": 0 }]]
     },
-    "Self-Grade (Anthropic)": {
+    "Self-Grade (Azure 4o-mini)": {
       "main": [[{ "node": "Compute Verdict", "type": "main", "index": 0 }]]
     },
     "Compute Verdict": {

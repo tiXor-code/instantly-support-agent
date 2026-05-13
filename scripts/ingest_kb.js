@@ -12,7 +12,10 @@
 // Required env (loaded from ../.env.local or ../.env):
 //   SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL
 //   SUPABASE_SERVICE_KEY or SUPABASE_SERVICE_ROLE_KEY
-//   OPENAI_API_KEY
+//   AZURE_ISA_ENDPOINT       (e.g. https://instantly-support-agent-363fe.openai.azure.com/)
+//   AZURE_ISA_KEY
+//   AZURE_ISA_EMBED_DEPLOYMENT  (default: text-embedding-3-small)
+//   AZURE_ISA_API_VERSION       (default: 2024-10-21)
 //
 // Run:  node ingest_kb.js
 // Dry:  DRY_RUN=1 node ingest_kb.js   (scrape + chunk, no embed, no upsert)
@@ -38,10 +41,12 @@ for (const envFile of ['.env.local', '.env']) {
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const AZURE_ENDPOINT = (process.env.AZURE_ISA_ENDPOINT || '').replace(/\/$/, '');
+const AZURE_KEY = process.env.AZURE_ISA_KEY;
+const AZURE_EMBED_DEPLOYMENT = process.env.AZURE_ISA_EMBED_DEPLOYMENT || 'text-embedding-3-small';
+const AZURE_API_VERSION = process.env.AZURE_ISA_API_VERSION || '2024-10-21';
 const DRY_RUN = process.env.DRY_RUN === '1';
-const EMBED_MODEL = 'text-embedding-3-small';
-const EMBED_DIMS = 1536;
+const EMBED_DIMS = 1536; // text-embedding-3-small native
 
 // Chunking heuristics. tiktoken-free: 4 chars ~ 1 token for English prose.
 const MAX_CHUNK_CHARS = 4000;        // ~1000 tokens
@@ -51,8 +56,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Missing SUPABASE_URL or service key. Set them in repo-root .env.local.');
   process.exit(1);
 }
-if (!DRY_RUN && !OPENAI_API_KEY) {
-  console.error('Missing OPENAI_API_KEY (required unless DRY_RUN=1).');
+if (!DRY_RUN && (!AZURE_ENDPOINT || !AZURE_KEY)) {
+  console.error('Missing AZURE_ISA_ENDPOINT / AZURE_ISA_KEY (required unless DRY_RUN=1).');
   process.exit(1);
 }
 
@@ -146,17 +151,21 @@ function chunkSections(sections, docMeta) {
 // ----------------------------------------------------------------------------
 
 async function embedBatch(inputs) {
-  const res = await fetch('https://api.openai.com/v1/embeddings', {
+  // Azure OpenAI embeddings — same payload shape as OpenAI.com but
+  // endpoint is /openai/deployments/<deployment>/embeddings with
+  // ?api-version= and api-key header.
+  const url = `${AZURE_ENDPOINT}/openai/deployments/${AZURE_EMBED_DEPLOYMENT}/embeddings?api-version=${AZURE_API_VERSION}`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'api-key': AZURE_KEY,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model: EMBED_MODEL, input: inputs }),
+    body: JSON.stringify({ input: inputs }),
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`OpenAI embeddings ${res.status}: ${t}`);
+    throw new Error(`Azure embeddings ${res.status}: ${t}`);
   }
   const data = await res.json();
   return data.data.map((d) => d.embedding);

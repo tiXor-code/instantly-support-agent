@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { verifyHmac } from '../hmac';
+import { verifyHmac, safeEqual } from '../hmac';
 
 const SECRET = 'test-secret';
 
@@ -57,5 +57,27 @@ describe('verifyHmac', () => {
   it('handles UTF-8 bodies with non-ASCII characters', () => {
     const body = JSON.stringify({ subject: 'Probléme deliverabilité — déjà vu 🚀' });
     expect(verifyHmac(body, sign(body), SECRET)).toBe(true);
+  });
+});
+
+describe('safeEqual', () => {
+  it('accepts two identical tokens', () => {
+    expect(safeEqual('cb-token', 'cb-token')).toBe(true);
+  });
+
+  it('rejects differing tokens', () => {
+    expect(safeEqual('cb-token', 'nope')).toBe(false);
+  });
+
+  it('rejects differing tokens of the same length without leaking length', () => {
+    expect(safeEqual('abcdef', 'abcxyz')).toBe(false);
+  });
+
+  it('fails closed on empty / missing inputs', () => {
+    expect(safeEqual('', 'cb-token')).toBe(false);
+    expect(safeEqual('cb-token', '')).toBe(false);
+    expect(safeEqual(undefined, 'cb-token')).toBe(false);
+    expect(safeEqual('cb-token', null)).toBe(false);
+    expect(safeEqual('', '')).toBe(false);
   });
 });

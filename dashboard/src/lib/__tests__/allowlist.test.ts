@@ -24,10 +24,13 @@ describe('isEmailAllowed', () => {
     expect(isEmailAllowed('', 'foo@x.com')).toBe(false);
   });
 
-  it('allows everyone when allowlist is empty / unset', () => {
-    expect(isEmailAllowed('whoever@x.com', '')).toBe(true);
-    expect(isEmailAllowed('whoever@x.com', undefined)).toBe(true);
-    expect(isEmailAllowed('whoever@x.com', '   ,   ')).toBe(true);
+  it('fails closed: denies everyone when the allowlist is empty / unset', () => {
+    // Security: an unconfigured ALLOWED_EMAILS must NOT allow arbitrary
+    // Google accounts to sign in. Empty/unset/whitespace-only => deny all.
+    expect(isEmailAllowed('whoever@x.com', '')).toBe(false);
+    expect(isEmailAllowed('whoever@x.com', undefined)).toBe(false);
+    expect(isEmailAllowed('whoever@x.com', null)).toBe(false);
+    expect(isEmailAllowed('whoever@x.com', '   ,   ')).toBe(false);
   });
 
   it('matches case-insensitively against the allowlist', () => {

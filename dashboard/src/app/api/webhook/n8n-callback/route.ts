@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
+import { safeEqual } from '@/lib/hmac';
 
 // POST /api/webhook/n8n-callback
 //
@@ -22,8 +23,13 @@ import { createServiceClient } from '@/lib/supabase';
 // }
 export async function POST(req: NextRequest) {
   const expected = process.env.N8N_CALLBACK_SECRET;
+  // Fail closed: a missing/empty secret is a server misconfiguration, not a
+  // reason to skip auth. Never let an unset secret disable the check.
+  if (!expected) {
+    return NextResponse.json({ error: 'server misconfigured' }, { status: 500 });
+  }
   const provided = req.headers.get('x-n8n-token') || '';
-  if (expected && provided !== expected) {
+  if (!safeEqual(provided, expected)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

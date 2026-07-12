@@ -16,8 +16,13 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   const signature = req.headers.get('x-instantly-signature') || '';
-  const secret = process.env.INBOUND_WEBHOOK_HMAC_SECRET || '';
-  if (secret && !verifyHmac(rawBody, signature, secret)) {
+  const secret = process.env.INBOUND_WEBHOOK_HMAC_SECRET;
+  // Fail closed: without a configured secret we cannot verify the signature,
+  // so reject every request instead of silently accepting unsigned ones.
+  if (!secret) {
+    return NextResponse.json({ error: 'server misconfigured' }, { status: 500 });
+  }
+  if (!verifyHmac(rawBody, signature, secret)) {
     return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
   }
 

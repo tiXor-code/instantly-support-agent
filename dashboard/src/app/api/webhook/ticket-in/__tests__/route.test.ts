@@ -73,6 +73,21 @@ describe('POST /api/webhook/ticket-in', () => {
     expect(mockSb.calls.find((c) => c.method === 'insert')).toBeUndefined();
   });
 
+  it('fails closed with 500 and no DB writes when INBOUND_WEBHOOK_HMAC_SECRET is unset', async () => {
+    delete process.env.INBOUND_WEBHOOK_HMAC_SECRET;
+    stageInsertHappyNoExternal();
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    // A validly-signed body must still be rejected: with no secret configured
+    // the server cannot verify anything, so it must not accept the request.
+    const res = await POST(
+      makeReq({ subject: 's', body: 'b', customer_email: 'a@b.com' }, { signature: 'sha256=deadbeef' }) as never
+    );
+    expect(res.status).toBe(500);
+    expect(mockSb.calls.find((c) => c.method === 'insert')).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('rejects missing required fields with 400', async () => {
     const req = makeReq({ subject: 'only-subject' });
     const res = await POST(req as never);

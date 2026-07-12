@@ -1,4 +1,15 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+
+// Constant-time string comparison for shared secrets / tokens.
+// Both inputs are hashed to a fixed-length digest first so timingSafeEqual
+// never throws on a length mismatch and the secret's length is not leaked
+// through timing. Returns false if either side is empty.
+export function safeEqual(a: string | undefined | null, b: string | undefined | null): boolean {
+  if (!a || !b) return false;
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 // Verify an HMAC-SHA256 signature on a raw request body.
 // Header format: `sha256=<lowercase hex digest>`.

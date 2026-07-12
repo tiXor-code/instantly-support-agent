@@ -10,14 +10,15 @@ export function parseAllowlist(csv: string | undefined | null): string[] {
 }
 
 // Decide whether an email may sign in.
-// Empty allowlist means "no allowlist configured" → allow everyone (used in
-// dev / self-hosted setups). Otherwise email must be present in the list.
+// Fail closed: an empty/unset allowlist denies everyone. ALLOWED_EMAILS must
+// be configured for any account to sign in — an unconfigured allowlist must
+// never grant access to arbitrary Google accounts.
 export function isEmailAllowed(
   email: string | undefined | null,
   allowlistCsv: string | undefined | null
 ): boolean {
   if (!email) return false;
   const list = parseAllowlist(allowlistCsv);
-  if (list.length === 0) return true;
+  if (list.length === 0) return false;
   return list.includes(email.toLowerCase());
 }

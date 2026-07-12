@@ -62,6 +62,16 @@ describe('POST /api/webhook/n8n-callback', () => {
     expect(res.status).toBe(401);
   });
 
+  it('fails closed with 500 and no DB writes when N8N_CALLBACK_SECRET is unset', async () => {
+    delete process.env.N8N_CALLBACK_SECRET;
+    stageHappy();
+    // Even with a matching-looking token, an unset secret must not skip auth.
+    const res = await POST(makeReq(baseBody, 'anything') as never);
+    expect(res.status).toBe(500);
+    expect(mockSb.calls.find((c) => c.method === 'insert')).toBeUndefined();
+    expect(mockSb.calls.find((c) => c.method === 'update')).toBeUndefined();
+  });
+
   it('verdict=auto_send → status auto_sent + run + history rows', async () => {
     stageHappy();
     const res = await POST(makeReq(baseBody) as never);

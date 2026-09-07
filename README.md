@@ -3,9 +3,15 @@
 > Take-home Task B for the **Instantly.ai AI Automation Engineer** role.
 > Auto-responds to support tickets when confident, routes to humans when not.
 
-**Live demo:** https://instantly-support-agent.vercel.app
+**Live demo:** https://instantly-support-agent.vercel.app (Google SSO behind an email allowlist, so the screenshot below is the way in for anyone without an invite)
 **Repo:** https://github.com/tiXor-code/instantly-support-agent
 **Loom walkthrough:** *(to be added once thresholds are tuned on the live system)*
+
+## The review queue
+
+![Review queue: six tickets the confidence gate routed to a human, each with its top-1 cosine, self-grade and the rule that fired](docs/dashboard-review-queue.png)
+
+Every row shows why the ticket is there: the top-1 cosine (L1), the self-grade minimum (L2), and the exact rule that fired. The six tickets above are the real `human_review` and `cannot_answer` outcomes from the 12-ticket eval suite in [`evals/`](evals/), with the scores and verdict reasons taken from [`evals/results/post-curation-fix.csv`](evals/results/post-curation-fix.csv).
 
 ## What it does
 
